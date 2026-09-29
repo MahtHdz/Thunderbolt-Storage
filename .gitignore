@@ -30,3 +30,8 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Local CLI and object data
+/storage-cli
+/local_store/
+/data/
