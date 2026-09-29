@@ -37,7 +37,7 @@ func (s *Store) acquireObjectLockMode(ctx context.Context, hash string, exclusiv
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	f, err := s.openLockFile(hash)
+	f, err := s.openLockFile(hash, exclusive)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +74,7 @@ func (s *Store) acquireObjectLockMode(ctx context.Context, hash string, exclusiv
 }
 
 func (s *Store) tryAcquireObjectLock(hash string) (func(), bool, error) {
-	f, err := s.openLockFile(hash)
+	f, err := s.openLockFile(hash, true)
 	if err != nil {
 		return nil, false, err
 	}
@@ -92,15 +92,24 @@ func (s *Store) tryAcquireObjectLock(hash string) (func(), bool, error) {
 	}, true, nil
 }
 
-func (s *Store) openLockFile(hash string) (*os.File, error) {
+func (s *Store) openLockFile(hash string, exclusive bool) (*os.File, error) {
 	path := s.lockPathFromHash(hash)
+	if !exclusive {
+		if f, err := os.OpenFile(path, os.O_RDONLY, 0); err == nil {
+			return f, nil
+		}
+	}
 	if err := s.ensureInternalDir(filepath.Dir(path)); err != nil {
 		return nil, fmt.Errorf("create lock shard: %w", err)
 	}
 	if _, err := regularFileExists(path); err != nil {
 		return nil, err
 	}
-	return os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil && !exclusive {
+		return os.OpenFile(path, os.O_RDONLY, 0)
+	}
+	return f, err
 }
 
 func lockWindowsFile(f *os.File, ov *syscall.Overlapped, exclusive bool) error {

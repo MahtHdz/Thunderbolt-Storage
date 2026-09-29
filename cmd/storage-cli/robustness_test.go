@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"example.com/robust-storage-cli/internal/storage"
+	"github.com/MahtHdz/Thunderbolt-Storage/internal/storage"
 )
 
 func invoke(t *testing.T, args ...string) (int, string, string) {
@@ -168,7 +168,10 @@ func TestOutputFailures(t *testing.T) {
 			}
 		}
 	}
-	if code := run(context.Background(), []string{"put", "--help"}, io.Discard, brokenWriter{}); code != exitFailure {
+	if code := run(context.Background(), []string{"put", "--help"}, brokenWriter{}, io.Discard); code != exitFailure {
+		t.Fatal(code)
+	}
+	if code := run(context.Background(), []string{"put", "--invalid-flag"}, io.Discard, brokenWriter{}); code != exitFailure {
 		t.Fatal(code)
 	}
 	s, err := storage.New(store)

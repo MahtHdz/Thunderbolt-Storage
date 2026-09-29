@@ -1,4 +1,4 @@
-.PHONY: fmt fmt-check test race coverage vet build check fuzz bench vuln
+.PHONY: fmt fmt-check test race coverage vet build check fuzz bench vuln lint
 
 VERSION ?= dev
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
@@ -26,6 +26,14 @@ coverage:
 
 vet:
 	go vet ./...
+
+lint:
+	@if command -v golangci-lint >/dev/null 2>&1; then \
+		golangci-lint run ./...; \
+	else \
+		echo "golangci-lint not installed; running go vet"; \
+		go vet ./...; \
+	fi
 
 build:
 	go build -trimpath -ldflags "$(LDFLAGS)" -o storage-cli ./cmd/storage-cli

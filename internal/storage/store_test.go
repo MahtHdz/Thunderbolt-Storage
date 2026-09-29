@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -147,5 +148,61 @@ func TestObjectPathIsContained(t *testing.T) {
 	}
 	if rel == ".." || len(rel) >= 3 && rel[:3] == ".."+string(filepath.Separator) {
 		t.Fatalf("object path escaped store: %s", path)
+	}
+}
+
+func TestCalculateObjectPath(t *testing.T) {
+	root := t.TempDir()
+	resolvedRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := CalculateObjectPath(root, "my-object")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(p, resolvedRoot) {
+		t.Fatalf("unexpected prefix: %s", p)
+	}
+
+	if _, err := CalculateObjectPath("", "id"); err == nil {
+		t.Fatal("expected error on empty baseDir")
+	}
+	if _, err := CalculateObjectPath(root, ""); err == nil {
+		t.Fatal("expected error on empty id")
+	}
+
+	f := filepath.Join(root, "not-a-dir")
+	_ = os.WriteFile(f, []byte("x"), 0o600)
+	if _, err := CalculateObjectPath(f, "id"); err == nil {
+		t.Fatal("expected error when baseDir is a file")
+	}
+}
+
+func TestReadOnlyStoreReadLocks(t *testing.T) {
+	root := t.TempDir()
+	storeDir := filepath.Join(root, "store")
+	s, err := New(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	mustPut(t, s, "ro-id", "read-only payload")
+
+	h, _ := keyHash("ro-id")
+	lockPath := s.lockPathFromHash(h)
+	if err := os.Chmod(lockPath, 0o400); err != nil {
+		t.Skip(err)
+	}
+	defer os.Chmod(lockPath, 0o600)
+
+	info, err := s.Stat(ctx, "ro-id", true)
+	if err != nil || !info.Verified {
+		t.Fatalf("stat on read-only lock file failed: %v", err)
+	}
+
+	dest := filepath.Join(t.TempDir(), "dest.bin")
+	if _, err := s.GetFile(ctx, "ro-id", dest, false); err != nil {
+		t.Fatalf("get on read-only lock file failed: %v", err)
 	}
 }

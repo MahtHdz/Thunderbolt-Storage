@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 const (
@@ -72,6 +73,30 @@ func NewWithOptions(baseDir string, options Options) (*Store, error) {
 	return s, nil
 }
 func (s *Store) BaseDir() string { return s.baseDir }
+
+// CalculateObjectPath returns the internal sharded container path for an object
+// ID under the specified store base directory without inspecting or modifying
+// the filesystem.
+func CalculateObjectPath(baseDir, id string) (string, error) {
+	if strings.TrimSpace(baseDir) == "" {
+		return "", fmt.Errorf("storage base directory is empty")
+	}
+	abs, err := filepath.Abs(baseDir)
+	if err != nil {
+		return "", err
+	}
+	if st, err := os.Stat(abs); err == nil && !st.IsDir() {
+		return "", fmt.Errorf("storage base path %q is not a directory", baseDir)
+	}
+	h, err := keyHash(id)
+	if err != nil {
+		return "", err
+	}
+	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
+		abs = resolved
+	}
+	return filepath.Join(abs, objectsDirName, h[:2], h[2:4], h), nil
+}
 func ValidateID(id string) error {
 	if id == "" || len(id) > MaxIDBytes || strings.IndexByte(id, 0) >= 0 {
 		return fmt.Errorf("%w: must contain 1-%d bytes and no NUL", ErrInvalidID, MaxIDBytes)
@@ -418,8 +443,20 @@ func validateRegularHandle(f *os.File) (*os.File, error) {
 	}
 	return f, nil
 }
+
+const copyBufferSize = 1024 * 1024
+
+var copyBufferPool = sync.Pool{
+	New: func() any {
+		b := make([]byte, copyBufferSize)
+		return &b
+	},
+}
+
 func copyWithContext(ctx context.Context, dst io.Writer, src io.Reader) (int64, error) {
-	return io.CopyBuffer(dst, &contextReader{ctx: ctx, r: src}, make([]byte, 1024*1024))
+	bufPtr := copyBufferPool.Get().(*[]byte)
+	defer copyBufferPool.Put(bufPtr)
+	return io.CopyBuffer(dst, &contextReader{ctx: ctx, r: src}, *bufPtr)
 }
 
 type contextReader struct {

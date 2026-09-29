@@ -3,8 +3,10 @@
 package storage
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"syscall"
 )
 
 const directorySyncSupported = true
@@ -24,6 +26,9 @@ func syncDir(path string) error {
 	defer dir.Close()
 
 	if err := dir.Sync(); err != nil {
+		if errors.Is(err, syscall.EROFS) || errors.Is(err, syscall.EINVAL) {
+			return nil
+		}
 		return fmt.Errorf("fsync directory: %w", err)
 	}
 	return nil
