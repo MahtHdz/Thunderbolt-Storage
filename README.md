@@ -14,28 +14,27 @@ qualified on the actual deployment platform.
 by the original payload. Existing raw objects need explicit migration. Do not
 run old and new binaries against the same store. See [Migration](#migration).
 
-The module path `example.com/robust-storage-cli` remains a development placeholder.
-Replace it and the internal imports before publishing a reusable module.
+The module path is `github.com/MahtHdz/Thunderbolt-Storage`.
 
 ## Quick start
 
 ```sh
 make build VERSION=1.0.0
 printf 'hello\n' > greeting.txt
-./storage-cli put --store ./data greeting ./greeting.txt
-./storage-cli get --store ./data greeting ./downloads/greeting.txt
+./storage-cli put -s ./data greeting ./greeting.txt
+./storage-cli get -s ./data greeting ./downloads/greeting.txt
 cmp greeting.txt downloads/greeting.txt
-./storage-cli stat --checksum --store ./data greeting
+./storage-cli stat -c -s ./data greeting
 ```
 
-The default store is `./local_store`. A new store and its internal directories
+The default store is `./local_store` (configurable via `TB_STORE` or `THUNDERBOLT_STORE` environment variables). A new store and its internal directories
 are created with mode `0700`; object and download staging files use `0600` on
 Unix. Existing Unix store roots must grant no group/other access. Windows uses
 ACLs: provision a private store and private destination directories yourself.
 
 ## Commands
 
-Flags precede positional arguments. Use `--` before IDs beginning with `-`.
+Flags can appear before or after positional arguments. Use `--` before IDs beginning with `-`.
 
 | Command | Arguments | Behavior |
 | --- | --- | --- |
@@ -48,18 +47,19 @@ Flags precede positional arguments. Use `--` before IDs beginning with `-`.
 | `path` | `<id> ...` | Print internal container paths; existence is not checked. |
 | `migrate` | `<id> <trusted-sha256> ...` | Verify and atomically wrap legacy raw objects. |
 | `cleanup` | none | Reclaim old, recognized staging files. |
+| `completion` | `bash` / `zsh` / `fish` | Generate shell autocompletion scripts. |
 | `version` | none | Print version, commit, build date, and platform. |
 
 `put`, `create`, `update`, `get`, `delete`, `stat`, and `migrate` support:
 
-| Flag | Default | Meaning |
-| --- | --- | --- |
-| `--store` | `./local_store` | Store directory. |
-| `--workers` | CPU count, clamped to 2–8 | Concurrent operations, from 1 to 256. |
-| `--json` | false | Emit newline-delimited JSON (NDJSON). |
-| `--timeout` | `0` | Per-command batch timeout; `0` disables it. |
-| `--max-bytes` | `0` | Maximum payload size for writes/migration; `0` is unlimited. Ignored by read/delete operations. |
-| `--require-durable` | false | Reject platforms without directory durability barriers. |
+| Flag | Short | Default | Meaning |
+| --- | --- | --- | --- |
+| `--store` | `-s` | `./local_store` or `$TB_STORE` | Store directory. |
+| `--workers` | `-w` | CPU count, clamped to 2–8 | Concurrent operations, from 1 to 256. |
+| `--json` | `-j` | false | Emit newline-delimited JSON (NDJSON). |
+| `--timeout` | `-t` | `0` | Per-command batch timeout; `0` disables it. |
+| `--max-bytes` | | `0` | Maximum payload size for writes/migration; `0` is unlimited. Ignored by read/delete operations. |
+| `--require-durable` | | false | Reject platforms without directory durability barriers. |
 
 `--require-durable` is appropriate for Unix deployments requiring durability.
 It rejects Windows and unsupported adapters instead of silently promising Unix
@@ -67,15 +67,15 @@ crash semantics. It does not certify a filesystem, controller, or physical disk.
 
 Additional flags:
 
-| Command | Flag | Meaning |
-| --- | --- | --- |
-| `get` | `--overwrite` | Replace an existing regular destination. Default: preserve it and fail. |
-| `delete` | `--missing-ok` | Accept an absent object. |
-| `stat` | `--checksum` | Read the complete payload and compare it to the persisted checksum. |
-| `cleanup` | `--older-than` | Positive duration, default `24h`. |
-| `cleanup` | `--downloads <directory>` | Clean download fragments in this one directory instead of object staging files. |
+| Command | Flag | Short | Meaning |
+| --- | --- | --- | --- |
+| `get` | `--overwrite` | `-o` | Replace an existing regular destination. Default: preserve it and fail. |
+| `delete` | `--missing-ok` | `-m` | Accept an absent object. |
+| `stat` | `--checksum` | `-c` | Read the complete payload and compare it to the persisted checksum. |
+| `cleanup` | `--older-than` | | Positive duration, default `24h`. |
+| `cleanup` | `--downloads <directory>` | | Clean download fragments in this one directory instead of object staging files. |
 
-`path` supports `--store` and `--json`. `cleanup` supports `--store`, `--json`,
+`path` supports `--store` (`-s`) and `--json` (`-j`). `cleanup` supports `--store` (`-s`), `--json` (`-j`),
 `--older-than`, and `--downloads`.
 
 Examples:
